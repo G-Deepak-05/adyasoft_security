@@ -46,6 +46,19 @@ final class PageDetectorTest extends TestCase
         $this->assertContains('page_unexpected_author', $types);
     }
 
+    public function testFlagsModifiedAndUnexpectedAuthorAdditively(): void
+    {
+        $detector = new PageDetector(['boss']);
+        $baseline = [$this->page(1, 'boss', 'hash-old')];
+        $current = [$this->page(1, 'attacker', 'hash-new')];
+
+        $findings = $detector->detect($current, $baseline);
+
+        $types = array_column($findings, 'type');
+        $this->assertContains('page_modified', $types);
+        $this->assertContains('page_unexpected_author', $types);
+    }
+
     public function testNoFindingsForUnchangedKnownPage(): void
     {
         $detector = new PageDetector(['boss']);
