@@ -9,6 +9,9 @@ use PHPUnit\Framework\TestCase;
 
 final class ScannerTest extends TestCase
 {
+    /** Must match ManifestStore::reconcile()'s 12-char hex site_id format. */
+    private const SITE_ID = 'a1b2c3d4e5f6';
+
     private string $dataDir;
     private string $siteDir;
 
@@ -54,21 +57,52 @@ final class ScannerTest extends TestCase
         file_put_contents($this->siteDir . '/.htaccess', "RewriteEngine On\n");
 
         $scoringConfig = require dirname(__DIR__) . '/config/scoring.php';
-        $mailConfig = require dirname(__DIR__) . '/config/mail.php';
 
-        $scanner = new Scanner($this->dataDir, $scoringConfig, $mailConfig, []);
-        $report = $scanner->scanSite($this->siteDir, 'site-a', 'cheap');
+        $scanner = new Scanner($this->dataDir, $scoringConfig, []);
+        $report = $scanner->scanSite($this->siteDir, self::SITE_ID, 'cheap');
 
         $this->assertSame('audit', $report['meta']['mode']);
-        $this->assertSame('site-a', $report['meta']['site_id']);
+        $this->assertSame(self::SITE_ID, $report['meta']['site_id']);
         // .htaccess appearing for the first time is itself a finding (no baseline yet).
         $subjects = array_column($report['findings'], 'subject');
         $this->assertContains('.htaccess', $subjects);
 
+        // Spec A4: a skipped check must be visible in the report itself, not only in the
+        // log — otherwise a degraded scan is indistinguishable from a genuinely clean one.
+        $this->assertSame(
+            ['DB-backed checks skipped: wp-config.php not parseable'],
+            $report['meta']['degraded_checks']
+        );
+
         // The report must actually be persisted to disk, not just returned in memory.
         $this->assertFileExists(
-            "{$this->dataDir}/sites/site-a/scans/{$report['meta']['scan_id']}.json"
+            "{$this->dataDir}/sites/" . self::SITE_ID . "/scans/{$report['meta']['scan_id']}.json"
         );
+    }
+
+    public function testScanIdIsDistinctPerTierSoTiersDoNotOverwriteEachOther(): void
+    {
+        file_put_contents($this->siteDir . '/wp-config.php', "<?php\n// no defines here\n");
+
+        $scoringConfig = require dirname(__DIR__) . '/config/scoring.php';
+        $scanner = new Scanner($this->dataDir, $scoringConfig, []);
+
+        $cheap = $scanner->scanSite($this->siteDir, self::SITE_ID, 'cheap');
+        $expensive = $scanner->scanSite($this->siteDir, self::SITE_ID, 'expensive');
+
+        $this->assertNotSame($cheap['meta']['scan_id'], $expensive['meta']['scan_id']);
+        // Both reports must survive on disk; a shared scan_id would overwrite the first.
+        $this->assertFileExists("{$this->dataDir}/sites/" . self::SITE_ID . "/scans/{$cheap['meta']['scan_id']}.json");
+        $this->assertFileExists("{$this->dataDir}/sites/" . self::SITE_ID . "/scans/{$expensive['meta']['scan_id']}.json");
+    }
+
+    public function testRejectsSiteIdThatIsNotAManifestDerivedHexId(): void
+    {
+        $scoringConfig = require dirname(__DIR__) . '/config/scoring.php';
+        $scanner = new Scanner($this->dataDir, $scoringConfig, []);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $scanner->scanSite($this->siteDir, '../../etc', 'cheap');
     }
 
     public function testModeIsAlwaysAuditRegardlessOfInput(): void
@@ -79,16 +113,15 @@ final class ScannerTest extends TestCase
         file_put_contents($this->siteDir . '/wp-config.php', "<?php\n// no defines here\n");
 
         $scoringConfig = require dirname(__DIR__) . '/config/scoring.php';
-        $mailConfig = require dirname(__DIR__) . '/config/mail.php';
 
-        $scanner = new Scanner($this->dataDir, $scoringConfig, $mailConfig, []);
-        $report = $scanner->scanSite($this->siteDir, 'site-a', 'expensive');
+        $scanner = new Scanner($this->dataDir, $scoringConfig, []);
+        $report = $scanner->scanSite($this->siteDir, self::SITE_ID, 'expensive');
 
         $this->assertSame('audit', $report['meta']['mode']);
 
         // The report must actually be persisted to disk, not just returned in memory.
         $this->assertFileExists(
-            "{$this->dataDir}/sites/site-a/scans/{$report['meta']['scan_id']}.json"
+            "{$this->dataDir}/sites/" . self::SITE_ID . "/scans/{$report['meta']['scan_id']}.json"
         );
     }
 }

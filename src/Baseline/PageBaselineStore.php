@@ -16,7 +16,11 @@ final class PageBaselineStore
             return [];
         }
         $decoded = json_decode(file_get_contents($this->baselinePath), true);
-        return is_array($decoded) ? $decoded : [];
+        if (!is_array($decoded)) {
+            error_log("Corrupted JSON in {$this->baselinePath}, resetting to empty state");
+            return [];
+        }
+        return $decoded;
     }
 
     public function save(array $pages): void

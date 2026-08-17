@@ -26,6 +26,9 @@ final class HtaccessDetectorTest extends TestCase
         $findings = $detector->detect("RewriteEngine On\nNewLine\n", "RewriteEngine On\n");
 
         $this->assertSame('htaccess_diff', $findings[0]['type']);
+        // Findings carry the subject path so RiskScorer groups them with FileDetector's
+        // own '.htaccess' findings instead of scoring the same file twice (FR-9).
+        $this->assertSame('.htaccess', $findings[0]['path']);
     }
 
     public function testFlagsExternalRedirectToUnknownDomain(): void
@@ -39,6 +42,7 @@ final class HtaccessDetectorTest extends TestCase
         $this->assertContains('htaccess_external_redirect', $types);
         $external = array_values(array_filter($findings, fn ($f) => $f['type'] === 'htaccess_external_redirect'))[0];
         $this->assertStringContainsString('evil-spam.example', $external['details']['target']);
+        $this->assertSame('.htaccess', $external['path']);
     }
 
     public function testFlagsStatusCodedRedirectToExternalDomain(): void
@@ -58,6 +62,18 @@ final class HtaccessDetectorTest extends TestCase
     {
         $detector = new HtaccessDetector(['mysite.com']);
         $contents = "Redirect 301 /old https://mysite.com/new\n";
+
+        $findings = $detector->detect($contents, $contents);
+
+        $this->assertSame([], $findings);
+    }
+
+    public function testDoesNotFlagKnownSiteDomainInDifferentCase(): void
+    {
+        // Hostnames are case-insensitive; a differently-cased form of the site's own
+        // domain must not be misreported as an external redirect (false-positive HIGH).
+        $detector = new HtaccessDetector(['MySite.com']);
+        $contents = "Redirect 301 /old https://MYSITE.COM/new\n";
 
         $findings = $detector->detect($contents, $contents);
 

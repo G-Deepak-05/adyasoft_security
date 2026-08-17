@@ -17,7 +17,11 @@ final class ManifestStore
         }
         $contents = file_get_contents($this->manifestPath);
         $decoded = json_decode($contents, true);
-        return is_array($decoded) ? $decoded : [];
+        if (!is_array($decoded)) {
+            error_log("Corrupted JSON in {$this->manifestPath}, resetting to empty state");
+            return [];
+        }
+        return $decoded;
     }
 
     public function save(array $manifest): void

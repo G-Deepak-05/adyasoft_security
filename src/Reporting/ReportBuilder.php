@@ -40,9 +40,10 @@ final class ReportBuilder
     {
         $lines = [];
         $lines[] = sprintf(
-            'Scan report — site %s (%s) — %s — mode: %s',
+            'Scan report — site %s (%s) — scan %s — %s — mode: %s',
             $report['meta']['site_id'],
             $report['meta']['site_path'],
+            $report['meta']['scan_id'],
             $report['meta']['scanned_at'],
             $report['meta']['mode'],
         );
@@ -54,6 +55,15 @@ final class ReportBuilder
             $report['summary']['by_severity']['MEDIUM'],
             $report['summary']['by_severity']['LOW'],
         );
+
+        $degraded = $report['meta']['degraded_checks'] ?? [];
+        if ($degraded !== []) {
+            $lines[] = sprintf('Degraded checks: %d', count($degraded));
+            foreach ($degraded as $reason) {
+                $lines[] = '  - ' . $reason;
+            }
+        }
+
         $lines[] = '';
 
         foreach ($report['findings'] as $item) {

@@ -11,7 +11,7 @@ final class EntropyAnalyzer
         '/eval\s*\(\s*gzinflate\s*\(/i',
         '/eval\s*\(\s*gzuncompress\s*\(/i',
         '/eval\s*\(\s*str_rot13\s*\(/i',
-        '/assert\s*\(\s*(?:\$|[\'"])/i',
+        '/\bassert\s*\(\s*(?:\$|[\'"])/i',
         '/create_function\s*\(/i',
         '/\$\$[a-zA-Z_]/',
         '/call_user_func(_array)?\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)\[/i',

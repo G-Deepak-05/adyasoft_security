@@ -33,24 +33,31 @@ final class Scanner
     public function __construct(
         private readonly string $dataDir,
         private readonly array $scoringConfig,
-        private readonly array $mailConfig,
         private readonly array $sitesConfig,
     ) {
     }
 
     public function scanSite(string $sitePath, string $siteId, string $tier): array
     {
+        // Defensive: $siteId is interpolated into filesystem paths below. Every caller
+        // sources it from ManifestStore::reconcile(), which always produces a 12-char
+        // hex SHA1 slice — anything else indicates a programming error in the caller.
+        if (preg_match('/^[a-f0-9]{12}$/', $siteId) !== 1) {
+            throw new \InvalidArgumentException("Invalid site_id format: {$siteId}");
+        }
+
         $siteDataDir = "{$this->dataDir}/sites/{$siteId}";
         if (!is_dir("{$siteDataDir}/scans")) {
             mkdir("{$siteDataDir}/scans", 0700, true);
         }
-        $logger = new Logger("{$siteDataDir}/scans/{$this->scanId($siteId)}.log");
+        $logger = new Logger("{$siteDataDir}/scans/{$this->scanId($siteId, $tier)}.log");
         $siteOverrides = $this->sitesConfig[$siteId] ?? [];
         $knownGoodUsers = $siteOverrides['known_good_users'] ?? [];
         $knownContributors = $siteOverrides['known_contributor_logins'] ?? $knownGoodUsers;
         $siteDomains = $siteOverrides['domains'] ?? [];
 
         $findings = [];
+        $degraded = [];
 
         // --- users, pages, active plugins: require a parseable wp-config.php ---
         $credentials = null;
@@ -61,6 +68,7 @@ final class Scanner
         $activePlugins = [];
         if ($credentials === null) {
             $logger->warning('wp-config.php not parseable; skipping DB-backed checks', ['site_id' => $siteId]);
+            $degraded[] = 'DB-backed checks skipped: wp-config.php not parseable';
         } else {
             try {
                 $pdo = DbConnectionFactory::createMysql($credentials);
@@ -84,6 +92,7 @@ final class Scanner
                 }
             } catch (\PDOException $e) {
                 $logger->error('DB connection failed; skipping DB-backed checks', ['error' => $e->getMessage()]);
+                $degraded[] = 'DB-backed checks skipped: connection failed';
             }
         }
 
@@ -122,10 +131,22 @@ final class Scanner
                     $findings = array_merge($findings, (new CoreIntegrityDetector())->detect($currentFiles, $coreChecksums));
                 } else {
                     $logger->warning('core checksums unavailable; skipping core integrity check', ['version' => $wpVersion]);
+                    $degraded[] = 'core integrity check skipped: checksums unavailable for version ' . ($wpVersion ?? 'unknown');
                 }
             }
 
             foreach ($activePlugins as $pluginFile) {
+                // Defensive: $pluginFile comes from the site's own active_plugins option,
+                // which is attacker-controllable on an already-compromised site and is
+                // interpolated into a filesystem path below. Only accept the canonical
+                // "slug/file.php" shape (no traversal, no separators beyond one slash).
+                if (!is_string($pluginFile) || preg_match('/^[A-Za-z0-9_.\-]+\/[A-Za-z0-9_.\-]+\.php$/', $pluginFile) !== 1) {
+                    $logger->warning('active_plugins entry has unsafe format; skipping checksum check', [
+                        'plugin' => is_string($pluginFile) ? $pluginFile : gettype($pluginFile),
+                    ]);
+                    $degraded[] = 'plugin integrity check skipped: active_plugins entry has unsafe format';
+                    continue;
+                }
                 $slug = dirname($pluginFile);
                 if ($slug === '.') {
                     continue;
@@ -133,6 +154,7 @@ final class Scanner
                 $pluginVersion = $this->readPluginVersion("{$sitePath}/wp-content/plugins/{$pluginFile}");
                 if ($pluginVersion === null) {
                     $logger->warning('plugin version header not found; skipping checksum check', ['plugin' => $slug]);
+                    $degraded[] = "plugin integrity check skipped for {$slug}: version header not found";
                     continue;
                 }
                 $pluginChecksums = $checksumClient->getPluginChecksums($slug, $pluginVersion);
@@ -140,6 +162,7 @@ final class Scanner
                     $findings = array_merge($findings, (new PluginIntegrityDetector())->detect($currentFiles, $slug, $pluginChecksums));
                 } else {
                     $logger->warning('plugin checksums unavailable; skipping check', ['plugin' => $slug, 'version' => $pluginVersion]);
+                    $degraded[] = "plugin integrity check skipped for {$slug}: checksums unavailable";
                 }
             }
 
@@ -163,10 +186,11 @@ final class Scanner
         $report = (new ReportBuilder())->build([
             'site_id' => $siteId,
             'site_path' => $sitePath,
-            'scan_id' => $this->scanId($siteId),
+            'scan_id' => $this->scanId($siteId, $tier),
             'mode' => 'audit',
             'scanned_at' => date('c'),
             'tier' => $tier,
+            'degraded_checks' => $degraded,
         ], $scored);
 
         $reportPath = "{$siteDataDir}/scans/{$report['meta']['scan_id']}.json";
@@ -207,9 +231,9 @@ final class Scanner
         return null;
     }
 
-    private function scanId(string $siteId): string
+    private function scanId(string $siteId, string $tier): string
     {
         static $ids = [];
-        return $ids[$siteId] ??= $siteId . '-' . date('Ymd-His');
+        return $ids["{$siteId}:{$tier}"] ??= $siteId . '-' . $tier . '-' . date('Ymd-His');
     }
 }
