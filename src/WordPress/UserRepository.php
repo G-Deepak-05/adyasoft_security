@@ -46,6 +46,6 @@ final class UserRepository
         if (!is_array($unserialized)) {
             return [];
         }
-        return array_values($unserialized);
+        return array_keys(array_filter($unserialized));
     }
 }

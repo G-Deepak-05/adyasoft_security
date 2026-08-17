@@ -60,7 +60,7 @@ final class SqliteWpSchema
 
         $serializedRoles = 'a:' . count($roles) . ':{';
         foreach ($roles as $role) {
-            $serializedRoles .= 's:1:"1";s:' . strlen($role) . ':"' . $role . '";';
+            $serializedRoles .= 's:' . strlen($role) . ':"' . $role . '";b:1;';
         }
         $serializedRoles .= '}';
 
