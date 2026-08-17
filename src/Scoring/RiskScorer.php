@@ -18,19 +18,25 @@ final class RiskScorer
 
         foreach ($findings as $finding) {
             $subject = $finding['path'] ?? $finding['user_login'] ?? $finding['page_id'] ?? '.htaccess';
-            $grouped[$subject][] = $finding;
+            $kind = isset($finding['path']) ? 'path' : (isset($finding['user_login']) ? 'user' : (isset($finding['page_id']) ? 'page' : 'htaccess'));
+            $groupKey = $kind . ':' . $subject;
+
+            if (!isset($grouped[$groupKey])) {
+                $grouped[$groupKey] = ['subject' => $subject, 'findings' => []];
+            }
+            $grouped[$groupKey]['findings'][] = $finding;
         }
 
         $scored = [];
-        foreach ($grouped as $subject => $subjectFindings) {
+        foreach ($grouped as $group) {
             $compositeScore = 0;
-            foreach ($subjectFindings as $finding) {
+            foreach ($group['findings'] as $finding) {
                 $compositeScore += $this->weights[$finding['type']] ?? 0;
             }
 
             $scored[] = [
-                'subject' => $subject,
-                'findings' => $subjectFindings,
+                'subject' => $group['subject'],
+                'findings' => $group['findings'],
                 'composite_score' => $compositeScore,
                 'severity' => $this->severityFor($compositeScore),
             ];

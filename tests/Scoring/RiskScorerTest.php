@@ -78,4 +78,21 @@ final class RiskScorerTest extends TestCase
         $this->assertSame(0, $scored[0]['composite_score']);
         $this->assertSame('LOW', $scored[0]['severity']);
     }
+
+    public function testDoesNotCollideCrossDomainNumericSubjects(): void
+    {
+        $scorer = new RiskScorer($this->weights(), $this->thresholds());
+
+        $findings = [
+            ['type' => 'user_not_in_known_good_roster', 'user_login' => '1'],
+            ['type' => 'page_unexpected_author', 'page_id' => 1],
+        ];
+
+        $scored = $scorer->score($findings);
+
+        $this->assertCount(2, $scored);
+        $this->assertCount(1, $scored[0]['findings']);
+        $this->assertCount(1, $scored[1]['findings']);
+        $this->assertNotSame($scored[0]['subject'], $scored[1]['subject']);
+    }
 }
