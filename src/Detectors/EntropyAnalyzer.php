@@ -11,7 +11,7 @@ final class EntropyAnalyzer
         '/eval\s*\(\s*gzinflate\s*\(/i',
         '/eval\s*\(\s*gzuncompress\s*\(/i',
         '/eval\s*\(\s*str_rot13\s*\(/i',
-        '/assert\s*\(\s*\$/i',
+        '/assert\s*\(\s*(?:\$|[\'"])/i',
         '/create_function\s*\(/i',
         '/\$\$[a-zA-Z_]/',
         '/call_user_func(_array)?\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)\[/i',
@@ -57,7 +57,7 @@ final class EntropyAnalyzer
             if (!is_array($token) || $token[0] !== T_CONSTANT_ENCAPSED_STRING) {
                 continue;
             }
-            $literal = trim($token[1], '\'"');
+            $literal = stripslashes(substr($token[1], 1, -1));
             if (strlen($literal) >= $this->minStringLength && $this->shannonEntropy($literal) >= $this->entropyThreshold) {
                 return true;
             }

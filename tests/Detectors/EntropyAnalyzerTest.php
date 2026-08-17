@@ -57,6 +57,17 @@ final class EntropyAnalyzerTest extends TestCase
         $this->assertContains('entropy_obfuscation_pattern', $types);
     }
 
+    public function testFlagsAssertWithStringArgument(): void
+    {
+        file_put_contents($this->path, "<?php\nassert(\"phpinfo()\");\n");
+
+        $analyzer = new EntropyAnalyzer();
+        $findings = $analyzer->analyzeFile($this->path);
+
+        $types = array_column($findings, 'type');
+        $this->assertContains('entropy_obfuscation_pattern', $types);
+    }
+
     public function testFlagsCallUserFuncFedFromRequestSuperglobal(): void
     {
         file_put_contents($this->path, "<?php\ncall_user_func(\$_GET['fn'], 'arg');\n");
