@@ -1,0 +1,10 @@
+<?php
+// dashboard/config/database.php.example
+// Copy to database.php and fill in real credentials before deploying.
+declare(strict_types=1);
+
+return [
+    'dsn' => 'mysql:host=localhost;dbname=findings_dashboard;charset=utf8mb4',
+    'user' => 'CHANGE_ME',
+    'password' => 'CHANGE_ME',
+];
