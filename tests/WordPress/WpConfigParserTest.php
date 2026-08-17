@@ -60,4 +60,20 @@ final class WpConfigParserTest extends TestCase
         $contents = "<?php\ndefine('DB_NAME', getenv('DB_NAME'));\n";
         $this->assertNull(WpConfigParser::parse($contents));
     }
+
+    public function testUnescapesEscapedQuotesInCredentials(): void
+    {
+        $contents = <<<'PHP'
+        <?php
+        define( 'DB_NAME', 'wp_mydb' );
+        define( 'DB_USER', 'wp_user' );
+        define( 'DB_PASSWORD', 'pa\'ss' );
+        define( 'DB_HOST', 'localhost' );
+        $table_prefix = 'wp_';
+        PHP;
+
+        $result = WpConfigParser::parse($contents);
+
+        $this->assertSame("pa'ss", $result['db_password']);
+    }
 }
