@@ -64,10 +64,20 @@ final class ScannerTest extends TestCase
         // .htaccess appearing for the first time is itself a finding (no baseline yet).
         $subjects = array_column($report['findings'], 'subject');
         $this->assertContains('.htaccess', $subjects);
+
+        // The report must actually be persisted to disk, not just returned in memory.
+        $this->assertFileExists(
+            "{$this->dataDir}/sites/site-a/scans/{$report['meta']['scan_id']}.json"
+        );
     }
 
     public function testModeIsAlwaysAuditRegardlessOfInput(): void
     {
+        // Use an unparseable wp-config.php so this test never attempts a real DB
+        // connection (setUp()'s fixture is deliberately parseable, which would
+        // otherwise make this test silently try to connect to MySQL on localhost).
+        file_put_contents($this->siteDir . '/wp-config.php', "<?php\n// no defines here\n");
+
         $scoringConfig = require dirname(__DIR__) . '/config/scoring.php';
         $mailConfig = require dirname(__DIR__) . '/config/mail.php';
 
@@ -75,5 +85,10 @@ final class ScannerTest extends TestCase
         $report = $scanner->scanSite($this->siteDir, 'site-a', 'expensive');
 
         $this->assertSame('audit', $report['meta']['mode']);
+
+        // The report must actually be persisted to disk, not just returned in memory.
+        $this->assertFileExists(
+            "{$this->dataDir}/sites/site-a/scans/{$report['meta']['scan_id']}.json"
+        );
     }
 }

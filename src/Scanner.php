@@ -41,6 +41,9 @@ final class Scanner
     public function scanSite(string $sitePath, string $siteId, string $tier): array
     {
         $siteDataDir = "{$this->dataDir}/sites/{$siteId}";
+        if (!is_dir("{$siteDataDir}/scans")) {
+            mkdir("{$siteDataDir}/scans", 0700, true);
+        }
         $logger = new Logger("{$siteDataDir}/scans/{$this->scanId($siteId)}.log");
         $siteOverrides = $this->sitesConfig[$siteId] ?? [];
         $knownGoodUsers = $siteOverrides['known_good_users'] ?? [];
@@ -115,7 +118,7 @@ final class Scanner
             if (is_file("{$sitePath}/wp-includes/version.php")) {
                 $wpVersion = $this->readWpVersion("{$sitePath}/wp-includes/version.php");
                 $coreChecksums = $wpVersion !== null ? $checksumClient->getCoreChecksums($wpVersion) : null;
-                if ($coreChecksums !== null) {
+                if ($coreChecksums !== null && $coreChecksums !== []) {
                     $findings = array_merge($findings, (new CoreIntegrityDetector())->detect($currentFiles, $coreChecksums));
                 } else {
                     $logger->warning('core checksums unavailable; skipping core integrity check', ['version' => $wpVersion]);
@@ -133,7 +136,7 @@ final class Scanner
                     continue;
                 }
                 $pluginChecksums = $checksumClient->getPluginChecksums($slug, $pluginVersion);
-                if ($pluginChecksums !== null) {
+                if ($pluginChecksums !== null && $pluginChecksums !== []) {
                     $findings = array_merge($findings, (new PluginIntegrityDetector())->detect($currentFiles, $slug, $pluginChecksums));
                 } else {
                     $logger->warning('plugin checksums unavailable; skipping check', ['plugin' => $slug, 'version' => $pluginVersion]);
@@ -166,10 +169,11 @@ final class Scanner
             'tier' => $tier,
         ], $scored);
 
-        file_put_contents(
-            "{$siteDataDir}/scans/{$report['meta']['scan_id']}.json",
-            (new ReportBuilder())->toJson($report)
-        );
+        $reportPath = "{$siteDataDir}/scans/{$report['meta']['scan_id']}.json";
+        $written = file_put_contents($reportPath, (new ReportBuilder())->toJson($report));
+        if ($written === false) {
+            $logger->error('failed to write scan report to disk', ['path' => $reportPath]);
+        }
 
         $logger->info('scan complete', ['total_findings' => $report['summary']['total_findings']]);
 

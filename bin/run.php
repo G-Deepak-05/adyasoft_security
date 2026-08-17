@@ -57,16 +57,25 @@ foreach ($manifest as $siteId => $entry) {
     }
 
     foreach ($tiersToRun as $runTier) {
-        $report = $scanner->scanSite($entry['path'], $siteId, $runTier);
-        $humanReadable = $reportBuilder->toHumanReadable($report);
+        try {
+            $report = $scanner->scanSite($entry['path'], $siteId, $runTier);
+            $humanReadable = $reportBuilder->toHumanReadable($report);
 
-        $alerted = $mailer->sendAlertIfNeeded($report, $humanReadable);
-        if (!$alerted) {
-            $digestQueue->append([
+            $alerted = $mailer->sendAlertIfNeeded($report, $humanReadable);
+            if (!$alerted) {
+                $digestQueue->append([
+                    'site_id' => $siteId,
+                    'scanned_at' => $report['meta']['scanned_at'],
+                    'total_findings' => $report['summary']['total_findings'],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $logger->error('scan failed for site; continuing with remaining sites', [
                 'site_id' => $siteId,
-                'scanned_at' => $report['meta']['scanned_at'],
-                'total_findings' => $report['summary']['total_findings'],
+                'tier' => $runTier,
+                'error' => $e->getMessage(),
             ]);
+            continue;
         }
     }
 }
