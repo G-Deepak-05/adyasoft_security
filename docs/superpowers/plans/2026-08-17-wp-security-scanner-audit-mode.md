@@ -4126,9 +4126,16 @@ final class Scanner
                 if ($slug === '.') {
                     continue;
                 }
-                $pluginChecksums = $checksumClient->getPluginChecksums($slug, 'latest');
+                $pluginVersion = $this->readPluginVersion("{$sitePath}/wp-content/plugins/{$pluginFile}");
+                if ($pluginVersion === null) {
+                    $logger->warning('plugin version header not found; skipping checksum check', ['plugin' => $slug]);
+                    continue;
+                }
+                $pluginChecksums = $checksumClient->getPluginChecksums($slug, $pluginVersion);
                 if ($pluginChecksums !== null) {
                     $findings = array_merge($findings, (new PluginIntegrityDetector())->detect($currentFiles, $slug, $pluginChecksums));
+                } else {
+                    $logger->warning('plugin checksums unavailable; skipping check', ['plugin' => $slug, 'version' => $pluginVersion]);
                 }
             }
 
@@ -4175,6 +4182,24 @@ final class Scanner
             include $versionFilePath;
         })();
         return $wp_version;
+    }
+
+    private function readPluginVersion(string $pluginMainFilePath): ?string
+    {
+        if (!is_file($pluginMainFilePath)) {
+            return null;
+        }
+
+        $header = file_get_contents($pluginMainFilePath, false, null, 0, 8192);
+        if ($header === false) {
+            return null;
+        }
+
+        if (preg_match('/^\s*(?:\*|\/\*+)?\s*Version:\s*(.+)$/mi', $header, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        return null;
     }
 
     private function scanId(string $siteId): string
