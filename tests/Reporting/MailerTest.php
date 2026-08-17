@@ -65,4 +65,18 @@ final class MailerTest extends TestCase
         $this->assertFalse($result);
         $this->assertFalse($called);
     }
+
+    public function testReportsCorrectSeverityWhenFindingsAreNotSorted(): void
+    {
+        $sent = null;
+        $mailer = new Mailer(function (string $to, string $subject, string $body) use (&$sent): bool {
+            $sent = compact('to', 'subject', 'body');
+            return true;
+        }, $this->mailConfig());
+
+        $result = $mailer->sendAlertIfNeeded($this->reportWithSeverities(['HIGH', 'CRITICAL']), 'body text');
+
+        $this->assertTrue($result);
+        $this->assertStringContainsString('[CRITICAL]', $sent['subject']);
+    }
 }

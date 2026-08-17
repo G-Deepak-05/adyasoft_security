@@ -6,6 +6,8 @@ namespace AdyaSoft\Security\Reporting;
 
 final class Mailer
 {
+    private const SEVERITY_RANK = ['CRITICAL' => 0, 'HIGH' => 1, 'MEDIUM' => 2, 'LOW' => 3];
+
     /** @param callable(string, string, string): bool $sendMail */
     public function __construct(
         private readonly mixed $sendMail,
@@ -17,11 +19,15 @@ final class Mailer
     {
         $alertBands = $this->mailConfig['alert_on_bands'];
         $highestBand = null;
+        $highestRank = PHP_INT_MAX;
 
         foreach ($report['findings'] as $item) {
             if (in_array($item['severity'], $alertBands, true)) {
-                $highestBand = $item['severity'];
-                break; // findings are pre-sorted by severity descending (ReportBuilder)
+                $rank = self::SEVERITY_RANK[$item['severity']] ?? PHP_INT_MAX;
+                if ($rank < $highestRank) {
+                    $highestRank = $rank;
+                    $highestBand = $item['severity'];
+                }
             }
         }
 
