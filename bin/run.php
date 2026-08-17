@@ -53,7 +53,10 @@ $findingsPusher = new FindingsPusher(
             'http' => [
                 'method' => 'POST',
                 'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$apiKey}\r\n",
-                'content' => json_encode($payload, JSON_UNESCAPED_SLASHES),
+                // JSON_INVALID_UTF8_SUBSTITUTE: a compromised site's filenames can
+                // contain arbitrary non-UTF-8 bytes. Without this, json_encode()
+                // returns false and every push for that site silently fails.
+                'content' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
                 'timeout' => 10,
                 'ignore_errors' => true,
             ],

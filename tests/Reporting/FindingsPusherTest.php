@@ -48,6 +48,36 @@ final class FindingsPusherTest extends TestCase
         $this->assertSame($this->report()['findings'], $captured['payload']['findings']);
     }
 
+    public function testPushStillDeliversAPayloadWhenAFindingContainsInvalidUtf8(): void
+    {
+        // A compromised site can hold filenames with arbitrary non-UTF-8 bytes.
+        $invalidUtf8Path = "wp-content/uploads/sh\xB1ell.php";
+
+        $report = $this->report();
+        $report['findings'][0]['findings'][0]['details'] = ['path' => $invalidUtf8Path];
+
+        $captured = null;
+        $pusher = new FindingsPusher(
+            function (string $url, array $payload, string $apiKey) use (&$captured): bool {
+                $captured = $payload;
+                return true;
+            },
+            'https://dashboard.example.com/ingest.php',
+            'test-api-key',
+        );
+
+        $this->assertTrue($pusher->push($report));
+        $this->assertNotNull($captured, 'push() must still invoke the HTTP callable');
+
+        // Plain JSON_UNESCAPED_SLASHES cannot encode this payload...
+        $this->assertFalse(json_encode($captured, JSON_UNESCAPED_SLASHES));
+
+        // ...but the flags bin/run.php now uses do, so the push is not silently lost.
+        $encoded = json_encode($captured, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->assertIsString($encoded);
+        $this->assertNotFalse(json_decode($encoded, true));
+    }
+
     public function testPushReturnsFalseWhenCallableFails(): void
     {
         $pusher = new FindingsPusher(

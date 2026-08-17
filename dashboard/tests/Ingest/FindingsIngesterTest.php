@@ -67,6 +67,54 @@ final class FindingsIngesterTest extends TestCase
         $this->assertSame(2, $count);
     }
 
+    public function testTwoFindingsOfTheSameTypeUnderOneSubjectMergeInsteadOfAbortingTheScan(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountId = (new AccountRepository($pdo))->create('client-a')['id'];
+        $ingester = new FindingsIngester($pdo);
+
+        // HtaccessDetector emits one htaccess_external_redirect finding per
+        // malicious redirect target; RiskScorer groups them all under '.htaccess'.
+        $rowsInserted = $ingester->ingest($accountId, [
+            'meta' => [
+                'site_id' => 'abc123def456',
+                'site_label' => 'example.com',
+                'scan_id' => 'scan-htaccess',
+                'scanned_at' => '2026-08-17T10:00:00+00:00',
+            ],
+            'findings' => [
+                [
+                    'subject' => '.htaccess',
+                    'severity' => 'CRITICAL',
+                    'composite_score' => 95,
+                    'findings' => [
+                        ['type' => 'htaccess_external_redirect', 'details' => ['target' => 'http://evil-one.example']],
+                        ['type' => 'htaccess_external_redirect', 'details' => ['target' => 'http://evil-two.example']],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertSame(1, $rowsInserted);
+
+        $rows = $pdo->query('SELECT * FROM findings')->fetchAll(\PDO::FETCH_ASSOC);
+        $this->assertCount(1, $rows);
+        $this->assertSame('htaccess_external_redirect', $rows[0]['finding_type']);
+        $this->assertSame('.htaccess', $rows[0]['subject']);
+
+        // Neither redirect target may be silently dropped.
+        $details = json_decode($rows[0]['details'], true);
+        $this->assertSame(
+            [
+                'details' => [
+                    ['target' => 'http://evil-one.example'],
+                    ['target' => 'http://evil-two.example'],
+                ],
+            ],
+            $details,
+        );
+    }
+
     public function testDifferentScanIdsAccumulateSeparately(): void
     {
         $pdo = SqliteDashboardSchema::createInMemoryDb();

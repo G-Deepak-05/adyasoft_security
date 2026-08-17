@@ -27,9 +27,19 @@ final class FindingsPageController
             ? (string) $queryParams['site_id']
             : null;
 
-        $types = isset($queryParams['type']) && is_array($queryParams['type'])
-            ? array_values($queryParams['type'])
-            : [];
+        // Finding types arrive either as a repeated `type[]` param or, from the
+        // findings page's free-text control, as a comma-separated `type_filter`
+        // string. There is no fixed enum of types (the scanner gains detectors
+        // over time), so neither shape is validated against a whitelist.
+        $types = [];
+        if (isset($queryParams['type']) && is_array($queryParams['type'])) {
+            $types = array_values($queryParams['type']);
+        } elseif (isset($queryParams['type_filter']) && is_string($queryParams['type_filter'])) {
+            $types = array_values(array_filter(
+                array_map('trim', explode(',', $queryParams['type_filter'])),
+                static fn (string $type): bool => $type !== '',
+            ));
+        }
 
         $from = isset($queryParams['from']) && $queryParams['from'] !== '' ? (string) $queryParams['from'] : null;
         $to = isset($queryParams['to']) && $queryParams['to'] !== '' ? (string) $queryParams['to'] : null;

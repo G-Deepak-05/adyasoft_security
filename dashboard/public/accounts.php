@@ -2,11 +2,19 @@
 // dashboard/public/accounts.php
 declare(strict_types=1);
 
+// A production HTTPS deployment should also set 'secure' => true; it is derived
+// from $_SERVER['HTTPS'] here so the plain-HTTP `php -S` dev workflow still works.
+session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure' => !empty($_SERVER['HTTPS']),
+]);
 session_start();
 require __DIR__ . '/../src/Autoload/autoload.php';
 
 use AdyaSoft\Dashboard\Accounts\AccountRepository;
 use AdyaSoft\Dashboard\Accounts\AccountsPageController;
+use AdyaSoft\Dashboard\Auth\Csrf;
 use AdyaSoft\Dashboard\Auth\SessionGuard;
 use AdyaSoft\Dashboard\Db\Connection;
 
@@ -21,7 +29,9 @@ $controller = new AccountsPageController(new AccountRepository($pdo));
 
 $newApiKey = null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Without a valid CSRF token the POST body is ignored entirely and the page
+// simply re-renders — a forged create/revoke never takes effect.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && Csrf::check()) {
     if (isset($_POST['create_name']) && $_POST['create_name'] !== '') {
         $created = $controller->handleCreate((string) $_POST['create_name']);
         $newApiKey = $created['api_key'];
@@ -41,6 +51,7 @@ $viewModel = $controller->buildViewModel();
     <p><strong>New API key (shown once, copy it now):</strong> <code><?= htmlspecialchars($newApiKey, ENT_QUOTES) ?></code></p>
 <?php endif; ?>
 <form method="post">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(Csrf::token(), ENT_QUOTES) ?>">
     <label>Account name: <input type="text" name="create_name"></label>
     <button type="submit">Create account</button>
 </form>
@@ -55,6 +66,7 @@ $viewModel = $controller->buildViewModel();
     <td>
         <?php if (!$account['revoked']): ?>
         <form method="post" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(Csrf::token(), ENT_QUOTES) ?>">
             <input type="hidden" name="revoke_id" value="<?= (int) $account['id'] ?>">
             <button type="submit">Revoke</button>
         </form>

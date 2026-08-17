@@ -19,6 +19,21 @@ full design.
    `php bin/create-user.php --username=<you> --password=<a strong password>`
 5. Visit `/login.php` on the deployed URL.
 
+### `public/.htaccess` must be copied too
+
+`public/.htaccess` is **required**, not optional. Apache and LiteSpeed running
+PHP as CGI/FastCGI — which is how hPanel typically runs PHP — strip the
+`Authorization` header before PHP sees it, so without this file every scanner
+push to `ingest.php` returns `401 invalid or missing API key` even with a
+correct API key.
+
+Many copy tools (FTP clients, `cp public/* ...`, some file managers) skip
+dotfiles by default, so verify the file is actually present on the host after
+uploading `public/`. If your host does not honour `.htaccess`, `ingest.php`
+also falls back to `REDIRECT_HTTP_AUTHORIZATION` and to
+`apache_request_headers()`/`getallheaders()`, but the `.htaccess` rewrite is
+what makes those fallbacks work on most configurations.
+
 ## Connecting a scanner to this dashboard
 
 On each scanner deployment (a separate hosting account running

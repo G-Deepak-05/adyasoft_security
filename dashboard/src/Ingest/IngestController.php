@@ -39,6 +39,6 @@ final class IngestController
 
     private function jsonResponse(int $status, array $body): array
     {
-        return ['status' => $status, 'body' => json_encode($body, JSON_UNESCAPED_SLASHES)];
+        return ['status' => $status, 'body' => json_encode($body, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE)];
     }
 }

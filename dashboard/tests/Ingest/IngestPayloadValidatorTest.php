@@ -84,6 +84,41 @@ final class IngestPayloadValidatorTest extends TestCase
         $this->assertFalse($result['valid']);
     }
 
+    public function testRejectsAnUnknownSeverityBand(): void
+    {
+        $payload = $this->validPayload();
+        $payload['findings'][0]['severity'] = 'PWNED';
+
+        $result = (new IngestPayloadValidator())->validate($payload);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('findings[0].severity', $result['errors'][0]);
+        $this->assertStringContainsString('CRITICAL', $result['errors'][0]);
+    }
+
+    public function testRejectsANonNumericCompositeScore(): void
+    {
+        $payload = $this->validPayload();
+        $payload['findings'][0]['composite_score'] = 'not-a-number';
+
+        $result = (new IngestPayloadValidator())->validate($payload);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('findings[0].composite_score', $result['errors'][0]);
+    }
+
+    public function testAcceptsEveryValidSeverityBand(): void
+    {
+        foreach (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as $severity) {
+            $payload = $this->validPayload();
+            $payload['findings'][0]['severity'] = $severity;
+
+            $result = (new IngestPayloadValidator())->validate($payload);
+
+            $this->assertTrue($result['valid'], "severity {$severity} must be accepted");
+        }
+    }
+
     public function testAcceptsEmptyFindingsArray(): void
     {
         $payload = $this->validPayload();

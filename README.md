@@ -15,6 +15,23 @@ full spec and architecture decisions.
 3. Reports and logs are written to `~/security-scanner/data/`, outside the
    web docroot.
 
+## Pushing findings to the central dashboard
+
+This scanner can optionally push each scan's findings to a central "findings
+dashboard" — a separate project living under `dashboard/` in this repo and
+deployed independently to its own hosting account. See `dashboard/README.md`
+for its own deployment instructions and for how to issue an API key per
+scanner deployment.
+
+Every scanner deployment **must** have a `config/dashboard.php` file, even if
+push is not being used yet: `bin/run.php` loads it unconditionally and will
+fatal without it. This matters when updating an existing deployment in place by
+copying new scanner files over an old one — make sure `config/dashboard.php`
+comes along. It already exists in this repo as a working example (following the
+same shape as `config/mail.php`) with a placeholder endpoint and API key. With
+the placeholder values left in place the push simply fails and is logged as a
+warning in `data/run.log` — it never blocks or fails the scan itself.
+
 ## Development
 
 ```

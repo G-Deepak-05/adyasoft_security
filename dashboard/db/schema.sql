@@ -8,14 +8,14 @@ CREATE TABLE accounts (
     api_key_hash  CHAR(64) NOT NULL,
     revoked_at    DATETIME NULL,
     created_at    DATETIME NOT NULL
-);
+) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE users (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     username       VARCHAR(255) NOT NULL UNIQUE,
     password_hash  VARCHAR(255) NOT NULL,
     created_at     DATETIME NOT NULL
-);
+) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE findings (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -36,4 +36,4 @@ CREATE TABLE findings (
     INDEX idx_type (finding_type),
     INDEX idx_scanned_at (scanned_at),
     UNIQUE INDEX idx_dedupe (account_id, scan_id, subject, finding_type)
-);
+) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;

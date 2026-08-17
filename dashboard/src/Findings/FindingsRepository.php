@@ -70,12 +70,42 @@ final class FindingsRepository
         }
 
         if (!empty($filters['to'])) {
-            $where[] = 'scanned_at <= ?';
-            $params[] = $filters['to'];
+            // The UI submits a date-only value ("2026-08-17") while scanned_at
+            // holds a full ISO-8601 timestamp, so "scanned_at <= '2026-08-17'"
+            // would exclude the whole selected day. Bind the exclusive start of
+            // the following day instead, making the `to` bound inclusive.
+            $exclusiveUpperBound = $this->exclusiveUpperBound((string) $filters['to']);
+
+            if ($exclusiveUpperBound !== null) {
+                $where[] = 'scanned_at < ?';
+                $params[] = $exclusiveUpperBound;
+            } else {
+                $where[] = 'scanned_at <= ?';
+                $params[] = $filters['to'];
+            }
         }
 
         $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
 
         return [$whereSql, $params];
+    }
+
+    /**
+     * For a date-only value ("2026-08-17"), return the exclusive upper bound
+     * that makes the whole of that day inclusive ("2026-08-18"). Returns null
+     * for anything that already carries a time component, so those values keep
+     * their existing exact-comparison semantics.
+     */
+    private function exclusiveUpperBound(string $to): ?string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) !== 1) {
+            return null;
+        }
+
+        try {
+            return (new \DateTimeImmutable($to))->modify('+1 day')->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

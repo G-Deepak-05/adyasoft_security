@@ -1,0 +1,6 @@
+# Apache/LiteSpeed running PHP as CGI/FastCGI (typical hPanel hosting) strips
+# the Authorization header before PHP sees it, which would make every scanner
+# push to ingest.php return 401. Re-expose it to PHP.
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

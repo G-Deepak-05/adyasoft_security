@@ -78,6 +78,31 @@ final class FindingsRepositoryTest extends TestCase
         $this->assertSame('new.php', $result['rows'][0]['subject']);
     }
 
+    public function testDateOnlyToFilterIncludesFindingsScannedLaterThatSameDay(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountId = (new AccountRepository($pdo))->create('client-a')['id'];
+        $this->seed($pdo, $accountId, 'scan-1', 'late.php', 'HIGH', 'file_new', '2026-08-17T23:00:00+00:00');
+
+        $result = (new FindingsRepository($pdo))->search(['to' => '2026-08-17'], 1, 50);
+
+        $this->assertSame(1, $result['total']);
+        $this->assertSame('late.php', $result['rows'][0]['subject']);
+    }
+
+    public function testDateOnlyToFilterExcludesTheFollowingDay(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountId = (new AccountRepository($pdo))->create('client-a')['id'];
+        $this->seed($pdo, $accountId, 'scan-1', 'late.php', 'HIGH', 'file_new', '2026-08-17T23:00:00+00:00');
+        $this->seed($pdo, $accountId, 'scan-2', 'next.php', 'HIGH', 'file_new', '2026-08-18T00:00:00+00:00');
+
+        $result = (new FindingsRepository($pdo))->search(['to' => '2026-08-17'], 1, 50);
+
+        $this->assertSame(1, $result['total']);
+        $this->assertSame('late.php', $result['rows'][0]['subject']);
+    }
+
     public function testDecodesDetailsBackIntoAnArray(): void
     {
         $pdo = SqliteDashboardSchema::createInMemoryDb();

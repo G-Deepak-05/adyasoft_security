@@ -63,6 +63,74 @@ final class FindingsPageControllerTest extends TestCase
         $this->assertSame(2, $viewModel['page']);
     }
 
+    private function seedTwoTypes(\PDO $pdo, int $accountId): void
+    {
+        $ingester = new FindingsIngester($pdo);
+        $ingester->ingest($accountId, [
+            'meta' => ['site_id' => 's1', 'site_label' => null, 'scan_id' => 'scan-1', 'scanned_at' => '2026-08-17T09:00:00+00:00'],
+            'findings' => [['subject' => 'a.php', 'severity' => 'HIGH', 'composite_score' => 50, 'findings' => [['type' => 'file_new', 'details' => []]]]],
+        ]);
+        $ingester->ingest($accountId, [
+            'meta' => ['site_id' => 's1', 'site_label' => null, 'scan_id' => 'scan-2', 'scanned_at' => '2026-08-17T08:00:00+00:00'],
+            'findings' => [['subject' => '.htaccess', 'severity' => 'HIGH', 'composite_score' => 50, 'findings' => [['type' => 'htaccess_diff', 'details' => []]]]],
+        ]);
+    }
+
+    public function testTypeArrayQueryParamFiltersResults(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountId = (new AccountRepository($pdo))->create('client-a')['id'];
+        $this->seedTwoTypes($pdo, $accountId);
+
+        $viewModel = (new FindingsPageController(new FindingsRepository($pdo)))
+            ->buildViewModel(['type' => ['htaccess_diff']]);
+
+        $this->assertSame(1, $viewModel['total']);
+        $this->assertSame(['htaccess_diff'], $viewModel['filters']['type']);
+    }
+
+    public function testCommaSeparatedTypeFilterQueryParamFiltersResults(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountId = (new AccountRepository($pdo))->create('client-a')['id'];
+        $this->seedTwoTypes($pdo, $accountId);
+
+        $viewModel = (new FindingsPageController(new FindingsRepository($pdo)))
+            ->buildViewModel(['type_filter' => ' htaccess_diff , file_new ,']);
+
+        $this->assertSame(['htaccess_diff', 'file_new'], $viewModel['filters']['type']);
+        $this->assertSame(2, $viewModel['total']);
+    }
+
+    public function testEmptyTypeFilterAppliesNoTypeFilter(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountId = (new AccountRepository($pdo))->create('client-a')['id'];
+        $this->seedTwoTypes($pdo, $accountId);
+
+        $viewModel = (new FindingsPageController(new FindingsRepository($pdo)))
+            ->buildViewModel(['type_filter' => '  ']);
+
+        $this->assertSame([], $viewModel['filters']['type']);
+        $this->assertSame(2, $viewModel['total']);
+    }
+
+    public function testAccountAndSiteQueryParamsFilterResults(): void
+    {
+        $pdo = SqliteDashboardSchema::createInMemoryDb();
+        $accountRepository = new AccountRepository($pdo);
+        $accountId = $accountRepository->create('client-a')['id'];
+        $otherAccountId = $accountRepository->create('client-b')['id'];
+        $this->seedTwoTypes($pdo, $accountId);
+
+        $controller = new FindingsPageController(new FindingsRepository($pdo));
+
+        $this->assertSame(2, $controller->buildViewModel(['account_id' => (string) $accountId])['total']);
+        $this->assertSame(0, $controller->buildViewModel(['account_id' => (string) $otherAccountId])['total']);
+        $this->assertSame(2, $controller->buildViewModel(['site_id' => 's1'])['total']);
+        $this->assertSame(0, $controller->buildViewModel(['site_id' => 'nope'])['total']);
+    }
+
     public function testIgnoresUnrecognizedSeverityValues(): void
     {
         $pdo = SqliteDashboardSchema::createInMemoryDb();
