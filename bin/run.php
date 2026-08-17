@@ -7,6 +7,7 @@ require __DIR__ . '/../src/Autoload/autoload.php';
 use AdyaSoft\Security\Discovery\ManifestStore;
 use AdyaSoft\Security\Discovery\SiteDiscoverer;
 use AdyaSoft\Security\Reporting\DigestQueue;
+use AdyaSoft\Security\Reporting\FindingsPusher;
 use AdyaSoft\Security\Reporting\Mailer;
 use AdyaSoft\Security\Reporting\ReportBuilder;
 use AdyaSoft\Security\Scanner;
@@ -28,6 +29,7 @@ $dataDir = "{$rootDir}/data";
 $scoringConfig = ConfigLoader::load("{$rootDir}/config/scoring.php");
 $mailConfig = ConfigLoader::load("{$rootDir}/config/mail.php");
 $sitesConfig = ConfigLoader::load("{$rootDir}/config/sites.php");
+$dashboardConfig = ConfigLoader::load("{$rootDir}/config/dashboard.php");
 
 $logger = new Logger("{$dataDir}/run.log");
 $logger->info('discovery started', ['account_home' => $accountHome]);
@@ -44,6 +46,27 @@ $mailer = new Mailer(
         return mail($to, $subject, $body, "From: {$mailConfig['from']}\r\n");
     },
     $mailConfig,
+);
+$findingsPusher = new FindingsPusher(
+    static function (string $url, array $payload, string $apiKey): bool {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$apiKey}\r\n",
+                'content' => json_encode($payload, JSON_UNESCAPED_SLASHES),
+                'timeout' => 10,
+                'ignore_errors' => true,
+            ],
+        ]);
+        $result = @file_get_contents($url, false, $context);
+        if ($result === false) {
+            return false;
+        }
+        $statusLine = $http_response_header[0] ?? '';
+        return (bool) preg_match('/\s200\s/', $statusLine);
+    },
+    $dashboardConfig['endpoint'],
+    $dashboardConfig['api_key'],
 );
 $digestQueue = new DigestQueue("{$dataDir}/digest-queue.jsonl");
 $reportBuilder = new ReportBuilder();
@@ -75,6 +98,10 @@ foreach ($manifest as $siteId => $entry) {
             }
 
             $scannedCount++;
+
+            if (!$findingsPusher->push($report)) {
+                $logger->warning('failed to push findings to dashboard', ['site_id' => $siteId, 'tier' => $runTier]);
+            }
         } catch (\Throwable $e) {
             $logger->error('scan failed for site; continuing with remaining sites', [
                 'site_id' => $siteId,
