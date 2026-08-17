@@ -41,6 +41,19 @@ final class HtaccessDetectorTest extends TestCase
         $this->assertStringContainsString('evil-spam.example', $external['details']['target']);
     }
 
+    public function testFlagsStatusCodedRedirectToExternalDomain(): void
+    {
+        $detector = new HtaccessDetector(['mysite.com']);
+        $contents = "Redirect 301 /old http://evil-spam.example/phish\n";
+
+        $findings = $detector->detect($contents, $contents);
+
+        $types = array_column($findings, 'type');
+        $this->assertContains('htaccess_external_redirect', $types);
+        $external = array_values(array_filter($findings, fn ($f) => $f['type'] === 'htaccess_external_redirect'))[0];
+        $this->assertStringContainsString('evil-spam.example', $external['details']['target']);
+    }
+
     public function testDoesNotFlagRedirectToKnownSiteDomain(): void
     {
         $detector = new HtaccessDetector(['mysite.com']);

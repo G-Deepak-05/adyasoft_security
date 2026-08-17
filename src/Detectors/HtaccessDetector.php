@@ -39,7 +39,7 @@ final class HtaccessDetector
         $lines = preg_split('/\r\n|\r|\n/', $contents);
 
         foreach ($lines as $line) {
-            if (preg_match('/^\s*(?:RewriteRule|RedirectMatch|Redirect)\s+\S+\s+(https?:\/\/\S+)/i', $line, $matches) === 1) {
+            if (preg_match('/^\s*(?:RewriteRule|RedirectMatch|Redirect)\s+.*?(https?:\/\/\S+)/i', $line, $matches) === 1) {
                 $target = $matches[1];
                 $host = parse_url($target, PHP_URL_HOST);
                 if ($host !== null && !in_array($host, $this->siteDomains, true)) {
