@@ -22,6 +22,9 @@ final class FileScanner
 
         foreach ($iterator as $fileInfo) {
             /** @var \SplFileInfo $fileInfo */
+            if ($fileInfo->isLink()) {
+                continue;
+            }
             if (!$fileInfo->isFile()) {
                 continue;
             }

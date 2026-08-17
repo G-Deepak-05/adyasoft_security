@@ -62,4 +62,31 @@ final class FileScannerTest extends TestCase
 
         $this->assertArrayHasKey('wp-content/uploads/2024/photo.jpg', $result);
     }
+
+    public function testScanExcludesSymlinksPointingOutsideRoot(): void
+    {
+        // Create a file outside the scanned root
+        $externalFile = sys_get_temp_dir() . '/external-' . uniqid('', true) . '.txt';
+        file_put_contents($externalFile, 'sensitive data');
+
+        try {
+            // Create a symlink inside the scanned root pointing to the external file
+            $symlinkPath = $this->root . '/wp-content/external-link.txt';
+            symlink($externalFile, $symlinkPath);
+
+            $scanner = new FileScanner($this->root);
+            $result = $scanner->scan();
+
+            // The symlink's relative path should NOT be in the results
+            $this->assertArrayNotHasKey('wp-content/external-link.txt', $result);
+        } finally {
+            // Clean up: unlink the symlink itself, then the external file
+            if (is_link($symlinkPath ?? null)) {
+                unlink($symlinkPath);
+            }
+            if (is_file($externalFile)) {
+                unlink($externalFile);
+            }
+        }
+    }
 }
