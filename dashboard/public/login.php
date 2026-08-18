@@ -44,17 +44,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html>
-<head><title>Findings Dashboard — Login</title></head>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Findings Dashboard — Login</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
 <body>
-<?php if ($error !== null): ?>
-    <p style="color:red;"><?= htmlspecialchars($error, ENT_QUOTES) ?></p>
-<?php endif; ?>
-<form method="post">
-    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(Csrf::token(), ENT_QUOTES) ?>">
-    <label>Username: <input type="text" name="username"></label><br>
-    <label>Password: <input type="password" name="password"></label><br>
-    <button type="submit">Log in</button>
-</form>
+    <div class="auth-container">
+        <div class="card login-card">
+            <h2>Sign In</h2>
+            <?php if ($error !== null): ?>
+                <div class="text-error"><?= htmlspecialchars($error, ENT_QUOTES) ?></div>
+            <?php endif; ?>
+            <form method="post">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(Csrf::token(), ENT_QUOTES) ?>">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required>
+                </div>
+                <button type="submit" class="btn">Log in</button>
+            </form>
+        </div>
+    </div>
 </body>
 </html>
